@@ -287,7 +287,7 @@ let chartInstance = null;
 async function load() {
   showLoading(true);
   try {
-    const res = await fetch('https://script.google.com/macros/s/AKfycbwRsKUIpN6X6w
+    const res = await fetch('/api/sheet');
   kA2QhvrJ10pP-WsmMCkma5xQsZSpVBurWvnEPa3mLfwPOfMSw86gZIrg/exec', { redirect:   
   'follow' }); 
     if (!res.ok) throw new Error(`Erreur serveur ${res.status}`);
