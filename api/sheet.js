@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   try {
     const SHEET_ID = '1URBq89zsukibuhspjo4dbWwdf15-nohAO4AwHmDbboo';
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
 
     const r = await fetch(url, { redirect: 'follow' });
     if (!r.ok) throw new Error(`Google Sheets error: ${r.status}`);
