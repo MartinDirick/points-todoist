@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Points Todoist</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f172a;
+      --surface:  #1e293b;
+      --surface2: #263448;
+      --border:   rgba(148, 163, 184, 0.12);
+      --accent:   #818cf8;
+      --accent2:  #38bdf8;
+      --success:  #4ade80;
+      --warn:     #fbbf24;
+      --danger:   #f87171;
+      --text:     #f1f5f9;
+      --muted:    #94a3b8;
+      --r:        14px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 16px 16px 40px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      padding: 24px 0 28px;
+    }
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    header .date {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 6px;
+      text-transform: capitalize;
+    }
+    header .last-update {
+      font-size: 0.72rem;
+      color: var(--muted);
+      opacity: 0.5;
+      margin-top: 4px;
+    }
+
+    /* ── KPI cards ── */
+    .kpis {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    @media (min-width: 560px) {
+      .kpis { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .card .label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 600;
+    }
+    .card .value {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+    .card .sub {
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    .card.c-accent  { border-color: rgba(129,140,248,0.25); }
+    .card.c-accent  .value { color: var(--accent); }
+    .card.c-warn    { border-color: rgba(251,191,36,0.25); }
+    .card.c-warn    .value { color: var(--warn); }
+    .card.c-success { border-color: rgba(74,222,128,0.25); }
+    .card.c-success .value { color: var(--success); }
+    .card.c-muted   .value { color: var(--muted); }
+
+    /* ── Progress bar ── */
+    .progress-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .progress-header .prog-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .progress-header .prog-pct {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .progress-track {
+      background: var(--surface2);
+      border-radius: 99px;
+      height: 10px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      width: 0%;
+      transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .progress-fill.done {
+      background: linear-gradient(90deg, var(--success), #86efac);
+    }
+
+    /* ── Chart ── */
+    .chart-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 18px 18px 14px;
+    }
+    .chart-title {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .chart-wrap {
+      position: relative;
+      height: 190px;
+    }
+
+    /* ── Loading ── */
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 80px 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .spinner {
+      width: 30px; height: 30px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    .error-box {
+      background: rgba(248,113,113,0.08);
+      border: 1px solid rgba(248,113,113,0.3);
+      color: var(--danger);
+      border-radius: var(--r);
+      padding: 16px;
+      text-align: center;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    /* ── Refresh button ── */
+    .refresh-row {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .btn-refresh {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 99px;
+      padding: 8px 18px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-refresh:hover {
+      color: var(--text);
+      border-color: rgba(148,163,184,0.3);
+    }
+
+    #app { display: none; }
+    #app.visible { display: block; }
+    #error { display: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Points Todoist</h1>
+  <div class="date" id="date-display"></div>
+  <div class="last-update" id="last-update"></div>
+</header>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <span>Chargement…</span>
+</div>
+
+<div id="error"></div>
+
+<div id="app">
+  <div class="kpis">
+    <div class="card c-accent" id="card-earned">
+      <div class="label">Pts gagnés</div>
+      <div class="value" id="kpi-earned">—</div>
+      <div class="sub">aujourd'hui</div>
+    </div>
+    <div class="card c-warn" id="card-remaining">
+      <div class="label">Restants</div>
+      <div class="value" id="kpi-remaining">—</div>
+      <div class="sub">pour l'objectif</div>
+    </div>
+    <div class="card c-muted">
+      <div class="label">Objectif</div>
+      <div class="value" id="kpi-goal">—</div>
+      <div class="sub">pts / jour</div>
+    </div>
+    <div class="card c-muted">
+      <div class="label">Cette semaine</div>
+      <div class="value" id="kpi-week">—</div>
+      <div class="sub" id="kpi-week-sub">objectifs atteints</div>
+    </div>
+  </div>
+
+  <div class="progress-section">
+    <div class="progress-header">
+      <span class="prog-label">Progression du jour</span>
+      <span class="prog-pct" id="prog-pct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="prog-fill"></div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-title">7 derniers jours</div>
+    <div class="chart-wrap">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="refresh-row">
+    <button class="btn-refresh" onclick="load()">Actualiser</button>
+  </div>
+</div>
+
+<script>
+let chartInstance = null;
+
+async function load() {
+  showLoading(true);
+  try {
+    const res = await fetch('/api/sheet');
+    if (!res.ok) throw new Error(`Erreur serveur ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    render(data);
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+function render({ today, weekData, fetchedAt }) {
+  showLoading(false);
+  document.getElementById('app').classList.add('visible');
+  document.getElementById('error').style.display = 'none';
+
+  // Header
+  const now = new Date();
+  document.getElementById('date-display').textContent = now.toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+  if (fetchedAt) {
+    const ft = new Date(fetchedAt);
+    document.getElementById('last-update').textContent =
+      `Mis à jour à ${ft.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  // KPIs
+  const earned    = today.earned    ?? 0;
+  const goal      = today.goal      || 30;
+  const remaining = today.remaining ?? 0;
+  const weekTotal = today.weekTotal ?? 0;
+  const goalsHit  = today.weekGoalsHit ?? 0;
+
+  document.getElementById('kpi-earned').textContent    = earned;
+  document.getElementById('kpi-goal').textContent      = goal;
+  document.getElementById('kpi-week').textContent      = weekTotal;
+  document.getElementById('kpi-week-sub').textContent  = `${goalsHit}/7 objectifs`;
+
+  // Remaining card — vert si objectif atteint
+  const remEl      = document.getElementById('kpi-remaining');
+  const cardRem    = document.getElementById('card-remaining');
+  if (remaining <= 0) {
+    remEl.textContent   = '0 ✓';
+    cardRem.className   = 'card c-success';
+  } else {
+    remEl.textContent   = remaining;
+    cardRem.className   = 'card c-warn';
+  }
+
+  // Progress bar
+  const pct = Math.min(100, Math.round((earned / goal) * 100));
+  document.getElementById('prog-pct').textContent = `${pct}%`;
+  requestAnimationFrame(() => {
+    const fill = document.getElementById('prog-fill');
+    fill.style.width = `${pct}%`;
+    fill.classList.toggle('done', pct >= 100);
+  });
+
+  // Chart
+  renderChart(weekData, goal);
+}
+
+function renderChart(weekData, goal) {
+  const labels = weekData.map(d =>
+    d.day.charAt(0).toUpperCase() + d.day.slice(1, 3)
+  );
+  const values = weekData.map(d => d.points);
+
+  const barColors = values.map(v =>
+    v >= goal ? 'rgba(74,222,128,0.85)' :
+    v > 0     ? 'rgba(129,140,248,0.85)' :
+                'rgba(38,52,72,0.9)'
+  );
+
+  if (chartInstance) chartInstance.destroy();
+  const ctx = document.getElementById('chart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          data: values,
+          backgroundColor: barColors,
+          borderRadius: 7,
+          borderSkipped: false,
+          order: 2,
+        },
+        {
+          type: 'line',
+          data: new Array(values.length).fill(goal),
+          borderColor: 'rgba(251,191,36,0.45)',
+          borderDash: [5, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          order: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          filter: (item) => item.datasetIndex === 0,
+          callbacks: {
+            title: (items) => {
+              const i = items[0].dataIndex;
+              return weekData[i] ? `${weekData[i].day} ${weekData[i].date}` : labels[i];
+            },
+            label: (item) => ` ${item.raw} pts`,
+          },
+          backgroundColor: '#1e293b',
+          borderColor: 'rgba(148,163,184,0.15)',
+          borderWidth: 1,
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          padding: 10,
+          cornerRadius: 8,
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          border: { display: false },
+          ticks: { color: '#64748b', font: { size: 11 } },
+        },
+        y: {
+          grid: { color: 'rgba(148,163,184,0.05)', drawTicks: false },
+          border: { display: false },
+          ticks: { color: '#64748b', font: { size: 11 }, padding: 8 },
+          suggestedMax: Math.max(goal * 1.15, Math.max(...values, 1) * 1.15),
+          beginAtZero: true,
+        }
+      }
+    }
+  });
+}
+
+function showLoading(show) {
+  document.getElementById('loading').style.display = show ? 'flex' : 'none';
+}
+
+function showError(msg) {
+  showLoading(false);
+  const el = document.getElementById('error');
+  el.style.display = 'block';
+  el.innerHTML = `<div class="error-box">Impossible de charger les données.<br><small style="opacity:.7">${msg}</small></div>`;
+}
+
+// Chargement initial + refresh auto toutes les 5 min
+load();
+setInterval(load, 5 * 60 * 1000);
+</script>
+</body>
+</html>
