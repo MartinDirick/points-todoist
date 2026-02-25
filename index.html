@@ -299,12 +299,16 @@ async function load() {
 async function fetchWithFallback() {
   const proxies = [
     {
-      url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(SCRIPT_URL),
-      parse: async (res) => { const w = await res.json(); return JSON.parse(w.contents); }
+      url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(SCRIPT_URL),
+      parse: async (res) => res.json()
     },
     {
-      url: 'https://corsproxy.io/?' + encodeURIComponent(SCRIPT_URL),
+      url: 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(SCRIPT_URL),
       parse: async (res) => res.json()
+    },
+    {
+      url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(SCRIPT_URL),
+      parse: async (res) => { const w = await res.json(); return JSON.parse(w.contents); }
     }
   ];
 
@@ -472,4 +476,3 @@ setInterval(load, 5 * 60 * 1000);
 </script>
 </body>
 </html>
-
