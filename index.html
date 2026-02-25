@@ -289,15 +289,36 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRsKUIpN6X6wkA2Qhvr
 async function load() {
   showLoading(true);
   try {
-    const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(SCRIPT_URL);
-    const res = await fetch(proxy);
-    if (!res.ok) throw new Error('Erreur réseau ' + res.status);
-    const wrapper = await res.json();
-    const data = JSON.parse(wrapper.contents);
+    const data = await fetchWithFallback();
     render(data);
   } catch (err) {
     showError(err.message);
   }
+}
+
+async function fetchWithFallback() {
+  const proxies = [
+    {
+      url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(SCRIPT_URL),
+      parse: async (res) => { const w = await res.json(); return JSON.parse(w.contents); }
+    },
+    {
+      url: 'https://corsproxy.io/?' + encodeURIComponent(SCRIPT_URL),
+      parse: async (res) => res.json()
+    }
+  ];
+
+  let lastError;
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy.url, { signal: AbortSignal.timeout(9000) });
+      if (!res.ok) throw new Error('Erreur réseau ' + res.status);
+      return await proxy.parse(res);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 function render({ today, weekData, fetchedAt }) {
@@ -451,3 +472,4 @@ setInterval(load, 5 * 60 * 1000);
 </script>
 </body>
 </html>
+
