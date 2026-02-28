@@ -148,6 +148,7 @@
       border: 1px solid var(--border);
       border-radius: var(--r);
       padding: 18px 18px 14px;
+      margin-bottom: 12px;
     }
     .chart-title {
       font-size: 0.7rem;
@@ -161,6 +162,106 @@
       position: relative;
       height: 190px;
     }
+
+    /* ── Timing section ── */
+    .timing-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 18px 18px 16px;
+      margin-bottom: 12px;
+    }
+    .timing-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .timing-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 600;
+    }
+    .timing-delta {
+      font-size: 0.78rem;
+      font-weight: 700;
+      border-radius: 99px;
+      padding: 2px 10px;
+    }
+    .timing-delta.faster {
+      background: rgba(74,222,128,0.12);
+      color: var(--success);
+    }
+    .timing-delta.slower {
+      background: rgba(248,113,113,0.12);
+      color: var(--danger);
+    }
+    .timing-delta.same {
+      background: rgba(148,163,184,0.1);
+      color: var(--muted);
+    }
+    .timing-main {
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      line-height: 1;
+      color: var(--success);
+      margin-bottom: 6px;
+    }
+    .timing-main.in-progress {
+      color: var(--warn);
+      font-size: 2rem;
+    }
+    .timing-sub {
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    /* ── Leaderboard ── */
+    .lb-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 18px 18px 14px;
+      margin-bottom: 12px;
+    }
+    .lb-title {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .lb-row:last-child { border-bottom: none; }
+    .lb-rank {
+      font-size: 1rem;
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .lb-date {
+      flex: 1;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .lb-time {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+    .lb-row.today .lb-date { color: var(--text); font-weight: 600; }
+    .lb-row.today .lb-time { color: var(--success); }
 
     /* ── Loading ── */
     #loading {
@@ -276,6 +377,22 @@
     </div>
   </div>
 
+  <!-- Timing section -->
+  <div class="timing-section" id="timing-section" style="display:none">
+    <div class="timing-header">
+      <span class="timing-label">⏱ Objectif atteint à</span>
+      <span class="timing-delta" id="timing-delta"></span>
+    </div>
+    <div class="timing-main" id="timing-main">—</div>
+    <div class="timing-sub" id="timing-sub"></div>
+  </div>
+
+  <!-- Leaderboard section -->
+  <div class="lb-section" id="lb-section" style="display:none">
+    <div class="lb-title">🏆 Meilleurs temps</div>
+    <div id="lb-list"></div>
+  </div>
+
   <div class="refresh-row">
     <button class="btn-refresh" onclick="load()">Actualiser</button>
   </div>
@@ -325,7 +442,7 @@ async function fetchWithFallback() {
   throw lastError;
 }
 
-function render({ today, weekData, fetchedAt }) {
+function render({ today, weekData, leaderboard, fetchedAt }) {
   showLoading(false);
   document.getElementById('app').classList.add('visible');
   document.getElementById('error').style.display = 'none';
@@ -375,6 +492,130 @@ function render({ today, weekData, fetchedAt }) {
 
   // Chart
   renderChart(weekData, goal);
+
+  // Timing + Leaderboard
+  updateTimingUI(leaderboard || []);
+}
+
+// ── Timing helpers ────────────────────────────────────────────────────────────
+
+function timeToMinutes(t) {
+  if (!t || typeof t !== 'string') return null;
+  const parts = t.split(':');
+  if (parts.length < 2) return null;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function minutesToDisplay(mins) {
+  if (mins === null || mins === undefined) return '—';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatDelta(todayMins, prevMins) {
+  if (prevMins === null || prevMins === undefined) return null;
+  const diff = todayMins - prevMins; // negative = faster
+  const abs = Math.abs(diff);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  const str = h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`;
+  if (diff < 0) return { text: `▲ ${str} plus tôt`, cls: 'faster' };
+  if (diff > 0) return { text: `▼ ${str} plus tard`, cls: 'slower' };
+  return { text: `= même heure`, cls: 'same' };
+}
+
+function updateTimingUI(leaderboard) {
+  const timingSection = document.getElementById('timing-section');
+  const lbSection     = document.getElementById('lb-section');
+
+  if (!leaderboard || leaderboard.length === 0) return;
+
+  // Today's date in YYYY-MM-DD
+  const todayStr = new Date().toLocaleDateString('sv-SE'); // sv-SE gives ISO format
+
+  // Find today's entry
+  const todayEntry = leaderboard.find(e => e.date === todayStr);
+
+  // Show timing section
+  timingSection.style.display = 'block';
+  const mainEl  = document.getElementById('timing-main');
+  const subEl   = document.getElementById('timing-sub');
+  const deltaEl = document.getElementById('timing-delta');
+
+  if (todayEntry && todayEntry.goalTime) {
+    // Goal already reached today
+    mainEl.textContent = todayEntry.goalTime;
+    mainEl.className   = 'timing-main';
+    subEl.textContent  = `Objectif atteint (${todayEntry.total} pts)`;
+
+    // Compare with yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toLocaleDateString('sv-SE');
+    const yEntry = leaderboard.find(e => e.date === yStr);
+
+    if (yEntry && yEntry.goalTime) {
+      const todayMins = timeToMinutes(todayEntry.goalTime);
+      const yMins     = timeToMinutes(yEntry.goalTime);
+      const delta = formatDelta(todayMins, yMins);
+      if (delta) {
+        deltaEl.textContent = delta.text;
+        deltaEl.className   = `timing-delta ${delta.cls}`;
+      }
+    } else {
+      deltaEl.textContent = '';
+      deltaEl.className   = 'timing-delta';
+    }
+  } else {
+    // Goal not reached yet today
+    mainEl.textContent = 'En cours…';
+    mainEl.className   = 'timing-main in-progress';
+    subEl.textContent  = todayEntry
+      ? `${todayEntry.total} pts accumulés aujourd'hui`
+      : 'Pas encore de points aujourd\'hui';
+    deltaEl.textContent = '';
+    deltaEl.className   = 'timing-delta';
+  }
+
+  // Leaderboard — top 10 days with a goalTime, sorted by earliest time
+  const ranked = leaderboard
+    .filter(e => e.goalTime)
+    .sort((a, b) => {
+      const am = timeToMinutes(a.goalTime);
+      const bm = timeToMinutes(b.goalTime);
+      return am - bm;
+    })
+    .slice(0, 10);
+
+  if (ranked.length === 0) return;
+
+  lbSection.style.display = 'block';
+  const medals = ['🥇', '🥈', '🥉'];
+  const listEl = document.getElementById('lb-list');
+  listEl.innerHTML = '';
+
+  ranked.forEach((entry, idx) => {
+    const isToday = entry.date === todayStr;
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (isToday ? ' today' : '');
+
+    // Format date as DD/MM
+    const d = entry.date.split('-');
+    const dateLabel = isToday
+      ? `Aujourd'hui (${d[2]}/${d[1]})`
+      : `${d[2]}/${d[1]}/${d[0]}`;
+
+    row.innerHTML = `
+      <span class="lb-rank">${medals[idx] || idx + 1}</span>
+      <span class="lb-date">${dateLabel}</span>
+      <span class="lb-time">${entry.goalTime}</span>
+    `;
+    listEl.appendChild(row);
+  });
 }
 
 function renderChart(weekData, goal) {
